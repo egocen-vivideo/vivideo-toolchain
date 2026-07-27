@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.egocen-vivideo/vivideo",
-  "description": "Generate AI videos with the Vivideo API: check account & credits, discover avatars/voices/brand kits, create auto-generate or manual-mode videos, wait safely for completion, and list videos.",
+  "description": "AI video generation via the Vivideo API: auto or manual mode, avatars, voices, brand kits.",
   "repository": {
     "url": "https://github.com/egocen-vivideo/vivideo-toolchain",
     "source": "github"
