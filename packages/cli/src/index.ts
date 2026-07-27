@@ -4,6 +4,7 @@
  * subprocess for agents. `--json` gives structured output; exit codes are
  * meaningful (see output.ts); API keys are never printed.
  */
+import { readFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { Command } from 'commander'
 import {
@@ -13,11 +14,17 @@ import {
 import { run, nonInteractive, makeClient, outputCtx, type GlobalOpts } from './context.js'
 import { printResult, reportError } from './output.js'
 
+// Read the version from package.json so `--version` never drifts from the
+// published package version.
+const pkgVersion = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+).version as string
+
 const program = new Command()
 program
   .name('vivideo')
   .description('Vivideo CLI — generate AI videos from the terminal, scripts, CI, or agents.')
-  .version('1.0.0')
+  .version(pkgVersion)
   .exitOverride() // throw CommanderError instead of exiting, so we control exit codes
   .option('--json', 'output structured JSON (implies non-interactive)')
   .option('--quiet', 'suppress non-essential output')

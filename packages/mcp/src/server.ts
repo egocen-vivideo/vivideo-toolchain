@@ -3,12 +3,19 @@
  * Model Context Protocol over stdin/stdout — the transport every local MCP
  * client (Claude Desktop, Cursor, etc.) uses.
  */
+import { readFileSync } from 'node:fs'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { TOOLS } from './tools.js'
 
+// Read the version from package.json so the server's advertised version never
+// drifts from the published package version.
+const VERSION = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+).version as string
+
 export function buildServer(): McpServer {
-  const server = new McpServer({ name: 'vivideo', version: '1.0.0' })
+  const server = new McpServer({ name: 'vivideo', version: VERSION })
   for (const t of TOOLS) {
     // (name, description, zodRawShape, handler) — the stable tool() signature.
     server.tool(t.name, t.description, t.schema, async (args: Record<string, unknown>) => {
