@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.egocen-vivideo/vivideo",
+  "description": "Generate AI videos with the Vivideo API: check account & credits, discover avatars/voices/brand kits, create auto-generate or manual-mode videos, wait safely for completion, and list videos.",
+  "repository": {
+    "url": "https://github.com/egocen-vivideo/vivideo-toolchain",
+    "source": "github"
+  },
+  "version": "1.0.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@vivideo/mcp",
+      "version": "1.0.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "VIVIDEO_API_KEY",
+          "description": "Your Vivideo API key (vv_live_...), created in the app under Settings > More > API Keys.",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

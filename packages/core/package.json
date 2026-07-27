@@ -1,0 +1,21 @@
+{
+  "name": "@vivideo/core",
+  "version": "1.0.1",
+  "description": "Shared, typed Vivideo API client with built-in rate limiting, retries, idempotency and secret redaction.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "openapi.yaml"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "engines": { "node": ">=18.17" },
+  "license": "MIT"
+}

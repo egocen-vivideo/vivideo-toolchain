@@ -1,0 +1,23 @@
+{
+  "name": "@vivideo/mcp",
+  "version": "1.0.1",
+  "description": "Vivideo MCP server — video generation tools for AI agents (Claude Desktop, Cursor, and any MCP client).",
+  "mcpName": "io.github.egocen-vivideo/vivideo",
+  "type": "module",
+  "bin": { "vivideo-mcp": "./dist/index.js" },
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@vivideo/core": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "engines": { "node": ">=18.17" },
+  "license": "MIT"
+}

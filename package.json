@@ -1,0 +1,27 @@
+{
+  "name": "vivideo-toolchain",
+  "version": "1.0.1",
+  "private": true,
+  "description": "Vivideo developer + agent toolchain: shared API client, MCP server, CLI, and Skills.",
+  "workspaces": [
+    "packages/core",
+    "packages/mcp",
+    "packages/cli"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @vivideo/core && npm run build --workspace @vivideo/mcp && npm run build --workspace @vivideo/cli",
+    "typecheck": "tsc -b --pretty",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "gen:types": "openapi-typescript packages/core/openapi.yaml -o packages/core/src/openapi.d.ts"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "typescript": "5.5.4",
+    "vitest": "2.0.5"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "license": "MIT"
+}
