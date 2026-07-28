@@ -102,9 +102,18 @@ export interface VideoList {
   total: number
 }
 
+/** One selectable look of a stock avatar — its avatar_id is what create_auto_video accepts. */
+export interface AvatarLook {
+  avatar_id?: string
+  name?: string
+  gender?: string
+  premium?: boolean
+}
+
 export interface Avatar {
-  id: string
-  object: 'avatar'
+  /** Present on OWNED/custom avatars; stock avatars are grouped by person (no top-level id). */
+  id?: string
+  object?: 'avatar'
   name?: string
   kind?: 'prompt' | 'photo'
   status?: string
@@ -112,7 +121,10 @@ export interface Avatar {
   gender?: string
   preview_image_url?: string
   preview_video_url?: string
-  looks?: unknown[]
+  /** Stock avatars: the person's looks — pass a looks[].avatar_id as avatar_id. */
+  looks?: AvatarLook[]
+  looks_count?: number
+  avatar_id?: string
 }
 
 export interface Voice {

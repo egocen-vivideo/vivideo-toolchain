@@ -105,7 +105,8 @@ export const TOOLS: ToolDef[] = [
     name: 'list_avatars',
     description:
       'List available avatars for auto-mode videos (the stock catalogue plus the account\'s own avatars). ' +
-      'Returns avatar ids to pass as `avatar_id` in create_auto_video. Use `search`/`limit` to keep responses small.',
+      'Stock avatars are grouped by person, each with a `looks` array — pass a looks[].avatar_id (or an owned ' +
+      'avatar\'s id) as `avatar_id` in create_auto_video. Use `search`/`limit` to keep responses small.',
     schema: {
       search: z.string().optional().describe('Filter avatars by name.'),
       gender: z.enum(['male', 'female', 'unspecified']).optional(),
@@ -114,9 +115,24 @@ export const TOOLS: ToolDef[] = [
     handler: (a) =>
       guarded(async () => {
         const res = await client().listAvatars({ search: a.search as string, gender: a.gender as string, limit: (a.limit as number) ?? 20 })
-        const shape = (x: { id?: string; name?: string; gender?: string; ready?: boolean; preview_image_url?: string }) =>
-          ({ id: x.id, name: x.name, gender: x.gender, ready: x.ready, preview_image_url: x.preview_image_url })
-        return { object: 'list', data: (res.data ?? []).slice(0, (a.limit as number) ?? 20).map(shape), owned: (res.owned ?? []).map(shape) }
+        // /v1/avatars groups stock avatars by PERSON; the ids create_auto_video needs live on
+        // looks[].avatar_id. Surface them (capped) — grouped items have no top-level id.
+        const shape = (x: import('@vivideo/core').Avatar) => {
+          const out: Record<string, unknown> = { name: x.name, gender: x.gender, preview_image_url: x.preview_image_url }
+          const looks = (x.looks ?? []).slice(0, 8).filter((l) => l.avatar_id).map((l) => ({ avatar_id: l.avatar_id, name: l.name }))
+          if (looks.length) out.looks = looks
+          if (x.looks_count) out.looks_count = x.looks_count
+          if (x.id != null) out.id = x.id            // owned/custom avatars carry these flat
+          if (x.avatar_id != null) out.avatar_id = x.avatar_id
+          if (x.ready != null) out.ready = x.ready
+          return out
+        }
+        return {
+          object: 'list',
+          data: (res.data ?? []).slice(0, (a.limit as number) ?? 20).map(shape),
+          owned: (res.owned ?? []).map(shape),
+          note: 'Pass a looks[].avatar_id (or an owned avatar\'s id) as avatar_id in create_auto_video.',
+        }
       }),
   },
   {

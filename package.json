@@ -1,6 +1,6 @@
 {
   "name": "vivideo-toolchain",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Vivideo developer + agent toolchain: shared API client, MCP server, CLI, and Skills.",
   "workspaces": [

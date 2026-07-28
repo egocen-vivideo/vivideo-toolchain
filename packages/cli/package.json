@@ -1,18 +1,24 @@
 {
   "name": "@vivideo/cli",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Vivideo CLI — generate AI videos from the terminal, scripts, CI, or agents.",
   "type": "module",
-  "bin": { "vivideo": "./dist/index.js" },
-  "files": ["dist"],
+  "bin": {
+    "vivideo": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@vivideo/core": "^1.0.0",
+    "@vivideo/core": "^1.0.2",
     "commander": "^12.1.0"
   },
-  "engines": { "node": ">=18.17" },
+  "engines": {
+    "node": ">=18.17"
+  },
   "license": "MIT"
 }
