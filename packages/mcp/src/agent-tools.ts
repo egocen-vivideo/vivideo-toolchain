@@ -2,7 +2,7 @@
 // stay in this process and ~/.vivideo (0600) and never appear in a tool result.
 import { z } from 'zod'
 import {
-  VivideoV3Client, VivideoError, isVivideoError, redactDeep, saveConfig, savePendingClaim, getPendingClaim, removePendingClaim,
+  VivideoV3Client, VivideoError, isVivideoError, redactDeep, saveConfig, tryResolveApiKey, savePendingClaim, getPendingClaim, removePendingClaim,
   waitForSignup, waitForCheckout, MIN_STATUS_POLL_MS, sleep,
   type AgentCheckoutInput, type AgentPlan, type AgentPeriod, type AgentStartStatus,
 } from '@vivideo/core'
@@ -34,6 +34,8 @@ export interface AgentToolsDeps {
 
 export function agentTools(deps: AgentToolsDeps): ToolDef[] {
   const claims = new Map<string, { claim_token: string; email?: string }>()
+  const codeRequested = new Set<string>() // emails this process sent a login code to
+  const norm = (e: string) => e.trim().toLowerCase()
   const lastPoll = new Map<string, number>()
   const v3 = () => new VivideoV3Client({ apiKey: deps.currentKey(), userAgent: 'vivideo-mcp/1.1', fetchImpl: deps.fetchImpl })
   let publicClient: VivideoV3Client | null = null
@@ -45,6 +47,19 @@ export function agentTools(deps: AgentToolsDeps): ToolDef[] {
     const since = clock.now() - (lastPoll.get(id) ?? -Infinity)
     if (since < MIN_STATUS_POLL_MS) await clock.sleep(MIN_STATUS_POLL_MS - since)
     lastPoll.set(id, clock.now())
+  }
+
+  // Adopt a new key only if none is configured or this process started the flow; a caller-supplied
+  // claim token / email must never switch an already-configured server to another account.
+  function adoptKey(apiKey: string, trusted: boolean, who: string): Record<string, unknown> {
+    if (trusted || !(deps.currentKey() || tryResolveApiKey())) return storeKey(apiKey)
+    return {
+      key_saved: false,
+      key_activated: false,
+      next: `A new API key was issued for ${who}, but it was NOT saved or used: this server already has a key, and this ` +
+        'sign-in was not started here. To switch accounts, the user must run `vivideo login --email <email>` (or ' +
+        '`vivideo configure`) themselves. The unused key can be revoked in Settings > API keys.',
+    }
   }
 
   function storeKey(apiKey: string): { key_saved: boolean; config_path?: string } {
@@ -100,18 +115,21 @@ export function agentTools(deps: AgentToolsDeps): ToolDef[] {
       schema: {
         checkout_id: z.string().min(1).describe('From start_signup.'),
         wait_seconds: z.number().int().min(0).max(MAX_WAIT_SECONDS).optional().describe('Wait up to this long for payment (default 0: check once).'),
-        claim_token: z.string().optional().describe('Only if this server did not start the sign-up. Treat as a secret.'),
+        claim_token: z.string().optional().describe('Only if this server did not start the sign-up. Treat as a secret. A key claimed this way is not saved when a key is already configured.'),
       },
       handler: (a) =>
         guarded(async () => {
           const id = a.checkout_id as string
           const stored = claims.get(id) ?? getPendingClaim(id)
-          const token = (a.claim_token as string | undefined) || stored?.claim_token
+          const given = a.claim_token as string | undefined
+          const token = given || stored?.claim_token
+          // Trusted = the token is our own (start_signup in this server, kept in memory or ~/.vivideo/claims.json).
+          const trusted = !!stored && (!given || given === stored.claim_token)
           if (!token) throw VivideoError.config(`No claim token for ${id} in this server. Start the sign-up with start_signup (or pass claim_token).`)
           await throttle(id)
           const { result, timedOut } = await waitForSignup(pub(), id, token, { timeoutMs: ((a.wait_seconds as number) ?? 0) * 1000, clock: deps.clock })
           lastPoll.set(id, clock.now())
-          return settleSignup(id, result, timedOut, stored?.email)
+          return settleSignup(id, result, timedOut, trusted ? stored?.email : undefined, trusted)
         }),
     },
     {
@@ -124,6 +142,7 @@ export function agentTools(deps: AgentToolsDeps): ToolDef[] {
       handler: (a) =>
         guarded(async () => {
           const r = await pub().requestLoginCode(a.email as string)
+          codeRequested.add(norm(a.email as string))
           return { status: r.status ?? 'code_sent', expires_in: r.expires_in, next: 'Ask your user for the 6-digit code sent to this email, then call verify_login_code.' }
         }),
     },
@@ -132,7 +151,8 @@ export function agentTools(deps: AgentToolsDeps): ToolDef[] {
       description:
         'Finish signing in with the 6-digit code from the email (works without an API key). Creates a new API key for the ' +
         'account, saves it (~/.vivideo/config.json) and uses it for every Vivideo tool — the key is never shown. Returns ' +
-        'the account plan and credits; if there is no plan yet, start_checkout buys one.',
+        'the account plan and credits; if there is no plan yet, start_checkout buys one. Call request_login_code first in this ' +
+        'session: if a key is already configured, a key from a code this server did not request is not saved or used.',
       schema: {
         email: z.string().email().max(254),
         code: z.string().regex(/^[0-9]{6}$/).describe('The 6 digits from the email.'),
@@ -141,8 +161,10 @@ export function agentTools(deps: AgentToolsDeps): ToolDef[] {
       handler: (a) =>
         guarded(async () => {
           const r = await pub().verifyLoginCode({ email: a.email as string, code: a.code as string, key_name: a.key_name as string | undefined })
-          const saved = storeKey(r.api_key)
-          return { status: 'signed_in', key_id: r.key_id, account: r.account, ...saved }
+          const trusted = codeRequested.has(norm(a.email as string))
+          const saved = adoptKey(r.api_key, trusted, a.email as string)
+          if (trusted) codeRequested.delete(norm(a.email as string))
+          return { status: saved.key_activated === false ? 'key_issued_not_saved' : 'signed_in', email: a.email, key_id: r.key_id, account: r.account, ...saved }
         }),
     },
     {
@@ -191,13 +213,14 @@ export function agentTools(deps: AgentToolsDeps): ToolDef[] {
     },
   ]
 
-  function settleSignup(id: string, s: AgentStartStatus, timedOut: boolean, email?: string): unknown {
+  function settleSignup(id: string, s: AgentStartStatus, timedOut: boolean, email: string | undefined, trusted: boolean): unknown {
     const base = { checkout_id: id, status: s.status }
     switch (s.status) {
       case 'ready': {
         if (!s.api_key) return { ...base, error: 'ready without a key; call request_login_code to sign in.' }
-        const saved = storeKey(s.api_key) // `ready` comes exactly once: keep the key before anything else
-        forget(id)
+        const saved = adoptKey(s.api_key, trusted, email ?? 'the account of this sign-up') // `ready` comes once: decide now
+        if (trusted) forget(id)
+        if (saved.key_activated === false) return { ...base, status: 'key_issued_not_saved', key_id: s.key_id, account: s.account, ...saved }
         return { ...base, key_id: s.key_id, account: s.account, ...saved, next: 'Signed in. Use the Vivideo tools (check_account, create_auto_video, …).' }
       }
       case 'needs_code':

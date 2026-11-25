@@ -13,7 +13,7 @@ node packages/mcp/dist/index.js       # starts the stdio server
 npx @vivideo/mcp
 ```
 
-The video tools need a `VIVIDEO_API_KEY` in the server's environment (a key from https://app.vivideo.ai/account/api-keys). The server starts without one: `check_configuration` reports `configured: false`, and the sign-up tools can get a key. `start_signup` is for a new email (the user pays on a Stripe link). `request_login_code` + `verify_login_code` are for an existing account. The new key is saved to `~/.vivideo/config.json` (`0600`) and used right away. See [agent sign-up](agent-signup.md).
+The video tools need a `VIVIDEO_API_KEY` in the server's environment (a key from https://app.vivideo.ai/account/api-keys). The server starts without one: `check_configuration` reports `configured: false`, and the sign-up tools can get a key. `start_signup` is for a new email (the user pays on a Stripe link). `request_login_code` + `verify_login_code` are for an existing account. The new key is saved to `~/.vivideo/config.json` (`0600`) and used right away. If a key is already configured, the server replaces it only for a flow it started itself; otherwise the result is `key_issued_not_saved`. See [agent sign-up](agent-signup.md).
 
 ## Connect to a client
 
