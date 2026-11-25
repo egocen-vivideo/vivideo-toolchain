@@ -22,5 +22,22 @@
   "engines": {
     "node": ">=18.17"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "homepage": "https://developers.vivideo.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egocen-vivideo/vivideo-toolchain.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/egocen-vivideo/vivideo-toolchain/issues"
+  },
+  "keywords": [
+    "ai-video",
+    "api-client",
+    "sdk",
+    "text-to-video",
+    "video-generation",
+    "vivideo"
+  ]
 }
