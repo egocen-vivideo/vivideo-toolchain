@@ -13,6 +13,13 @@ alias vivideo="node $(pwd)/packages/cli/dist/index.js"
 npm i -g @vivideo/cli
 ```
 
+No account or key yet? Get one from the CLI (details: [agent sign-up](agent-signup.md)):
+
+```bash
+vivideo signup --email you@example.com --plan pro --period weekly --open   # new email: pay, then the key is saved
+vivideo login --email you@example.com                                     # existing account: 6-digit email code
+```
+
 Provide a key one of three ways (highest precedence first):
 
 ```bash
@@ -42,8 +49,13 @@ The key is stored owner-only and **never printed**. `vivideo config` shows where
 | `vivideo wait <id> [--timeout <sec>]` | Wait for a terminal state. |
 | `vivideo videos [--status --limit]` / `list` | List videos. |
 | `vivideo render <id>` | Free accounts: render a preview after upgrading. |
+| `vivideo signup --email <e> --plan pro\|max --period weekly\|yearly [--open --no-wait --timeout --key-name]` | New account, pay first: prints the Stripe link, waits, saves the key. An existing email switches to the code flow. |
+| `vivideo signup status <checkout_id> [--wait --claim-token]` | Check or resume a sign-up; saves the key on `ready`. |
+| `vivideo login --email <e> [--code <6 digits> --key-name]` | Existing account: email code → new key, saved. Without `--email`: same as `configure`. |
+| `vivideo checkout --plan … --period … \| --credits <n> [--open --no-wait --timeout --idempotency-key]` | Buy a plan or credits (needs a key): link + wait. |
+| `vivideo checkout status <checkout_id> [--wait]` | `pending` / `paid` / `expired` / `failed`. |
 
-Every command accepts the global flags: `--json`, `--quiet`, `--no-input`, `-y/--yes`, `--api-key`, `--base-url`.
+Every command accepts the global flags: `--json`, `--quiet`, `--no-input`, `-y/--yes`, `--api-key`, `--base-url`, `--v3-base-url` (sign-up, login and checkout; env `VIVIDEO_V3_BASE_URL`, default `https://v3.api.vivideo.ai`).
 
 ## JSON & non-interactive (scripts, CI, agents)
 
@@ -74,6 +86,12 @@ echo "exit: $?"
 | 8 | network / timeout (incl. `wait` timing out) |
 | 9 | invalid request |
 | 10 | duplicate request |
+| 11 | conflict (e.g. already subscribed, 10 active keys) |
+| 12 | forbidden (sign-up refused, account unavailable) |
+| 13 | needs the email code: the email already has an account (finish with `vivideo login --email … --code …`) |
+| 14 | payment expired or failed |
+
+Exit 8 also covers `signup --wait` / `checkout --wait` stopping before payment; resume with the `status … --wait` command printed.
 
 Scripts and agents branch on these instead of parsing text. Errors always show the stable `code` and a next step (a `links.*` URL when the API returns one) — never a generic "something went wrong".
 

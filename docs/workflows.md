@@ -15,11 +15,32 @@ vivideo create auto \
 # → prints video_url when completed; exit 0
 ```
 
+## Agent — get an account and a key (CLI-first)
+
+The payment page is the only human step. See [agent sign-up](agent-signup.md) for every outcome.
+
+```bash
+# new email: pay first
+vivideo --json signup --email ada@example.com --plan pro --period weekly --no-wait
+#   → show checkout_url to the user
+vivideo --json signup status <checkout_id> --wait     # exit 0: key saved; 13: use the code flow
+
+# existing account (or exit 13 above)
+vivideo --json login --email ada@example.com          # sends the code
+vivideo --json login --email ada@example.com --code <code from the user>
+
+# later: buy a plan or credits
+vivideo --json checkout --credits 500 --no-wait        # → show checkout_url
+vivideo --json checkout status <checkout_id> --wait
+```
+
+With MCP: `start_signup` → show the link → `get_signup_status`; on `account_exists` / `needs_code`: `request_login_code` → `verify_login_code`.
+
 ## Agent — the canonical workflow (MCP)
 
 An agent completes this without guessing:
 
-1. `check_configuration` → if `configured:false`, ask the user to set `VIVIDEO_API_KEY` and stop.
+1. `check_configuration` → if `configured:false`, get a key: `start_signup` (new email) or `request_login_code` + `verify_login_code` (existing account). Or ask the user to set `VIVIDEO_API_KEY`.
 2. `check_account` → read `plan`, `premium`, `credits`, `links`.
 3. Discover as needed: `list_models` / `list_avatars` / `list_voices` / `list_brand_kits`.
 4. `estimate_credits` → compare to `credits`; if short, route to `links.buy_credits` / `links.upgrade`.

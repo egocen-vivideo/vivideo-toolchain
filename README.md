@@ -6,8 +6,8 @@ Everything sits *on top of* the public API (the source of truth). No backend bus
 
 ```
 vivideo-toolchain/            npm workspaces monorepo (TypeScript)
-├── packages/core   @vivideo/core   one typed API client + guardrails (shared)
-├── packages/mcp    @vivideo/mcp    MCP server (stdio) — 13 agent tools
+├── packages/core   @vivideo/core   one typed API client + guardrails (shared), plus the V3 sign-up/checkout client
+├── packages/mcp    @vivideo/mcp    MCP server (stdio) — 19 agent tools (13 video + 6 sign-up/payment)
 ├── packages/cli    @vivideo/cli    `vivideo` CLI — humans, scripts, CI, agents
 ├── skills/                          reusable agent Skills (SKILL.md)
 └── docs/                            installation, configuration, workflows
@@ -28,11 +28,19 @@ One client, one set of types, derived from [`packages/core/openapi.yaml`](packag
 | **Idempotency** | Every video-create sends an `Idempotency-Key`; retries reuse it → no duplicate charges. |
 | **Timeouts** | Per-request `AbortController` timeout (default 30s). |
 | **Safe waiting** | `waitForVideo` polls at the API's suggested interval, with a hard timeout — never a `while(true)`. |
-| **Secret redaction** | API keys / signing secrets are stripped from every log, error, and output. |
+| **Secret redaction** | API keys, signing secrets, sign-up claim tokens and login codes are stripped from every log, error, and output. |
+| **Payment waits** | `waitForSignup` / `waitForCheckout` poll at most every 10 s with a hard timeout. |
 
 These complement — and never bypass — the API's own auth, rate limits, idempotency, credit checks, premium gates, ownership and error model.
 
 ## Quick start
+
+No key yet? The CLI gets one; the Stripe payment page is the only step a person does ([agent sign-up](docs/agent-signup.md)):
+
+```bash
+node packages/cli/dist/index.js signup --email you@example.com --plan pro --period weekly --open   # new email
+node packages/cli/dist/index.js login --email you@example.com                                     # existing account
+```
 
 ```bash
 # from the repo (until packages are published to npm)
@@ -54,6 +62,7 @@ Once published: `npm i -g @vivideo/cli` (gives `vivideo`), and `npx @vivideo/mcp
 
 ## Docs
 
+- [Agent sign-up and payment — new account, email code, checkout (CLI + MCP)](docs/agent-signup.md)
 - [MCP server — install, configure, connect to clients, tool reference](docs/mcp.md)
 - [CLI — install, auth, command reference, JSON & non-interactive use, exit codes](docs/cli.md)
 - [Skills — install & use](skills/README.md)
@@ -62,7 +71,8 @@ Once published: `npm i -g @vivideo/cli` (gives `vivideo`), and `npx @vivideo/mcp
 
 ## Authentication & security
 
-- Keys are read from (in order): explicit option → `VIVIDEO_API_KEY` env → `~/.vivideo/config.json` (written owner-only `0600`).
+- Keys are read from (in order): explicit option → `VIVIDEO_API_KEY` env → `~/.vivideo/config.json` (written owner-only `0600`). `vivideo signup` / `vivideo login` and the MCP sign-up tools save new keys there.
+- The sign-up, login and checkout routes use the V3 API (`https://v3.api.vivideo.ai`, override with `VIVIDEO_V3_BASE_URL`).
 - The key is **never printed** — all output passes through secret redaction; `configure` stores it without echoing it.
 - Keys are account-scoped secrets. Keep them server-side; one per integration so a leak is revocable in isolation.
 
