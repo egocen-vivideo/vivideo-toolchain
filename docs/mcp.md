@@ -13,7 +13,7 @@ node packages/mcp/dist/index.js       # starts the stdio server
 npx @vivideo/mcp
 ```
 
-The server needs a `VIVIDEO_API_KEY` in its environment (a key from https://app.vivideo.ai/account/api-keys). It starts even without one — `check_configuration` will report `configured: false` so an agent can tell the user what to do.
+The video tools need a `VIVIDEO_API_KEY` in the server's environment (a key from https://app.vivideo.ai/account/api-keys). The server starts without one: `check_configuration` reports `configured: false`, and the sign-up tools can get a key. `start_signup` is for a new email (the user pays on a Stripe link). `request_login_code` + `verify_login_code` are for an existing account. The new key is saved to `~/.vivideo/config.json` (`0600`) and used right away. See [agent sign-up](agent-signup.md).
 
 ## Connect to a client
 
@@ -58,6 +58,12 @@ All tools return structured JSON. Errors come back as a structured object (`isEr
 | `wait_for_video` | Bounded, safe wait to a terminal state. |
 | `list_videos` | The account's videos, newest first. |
 | `render_preview` | Free accounts: render a `preview` after upgrading. |
+| `start_signup` | **No key needed.** New email: returns a Stripe `checkout_url` to show the user. `account_exists` → use the code tools. |
+| `get_signup_status` | **No key needed.** `pending` / `ready` (key saved + active) / `needs_code` / `claimed` / `expired` / `failed`. `wait_seconds` ≤ 300. |
+| `request_login_code` | **No key needed.** Existing account: emails a 6-digit code. |
+| `verify_login_code` | **No key needed.** Code → new key, saved and active. Never returned. |
+| `start_checkout` | Buy a plan (`plan` + `period`) or `credits`: returns a link for the user. |
+| `get_checkout` | `pending` / `paid` / `expired` / `failed`. `wait_seconds` ≤ 300. |
 
 Inputs are explicit and described (see the tool schemas). Responses are compact — large catalogues support `search`/`limit`.
 
@@ -65,7 +71,9 @@ Inputs are explicit and described (see the tool schemas). Responses are compact 
 
 - **Long-running generation is safe:** create returns immediately with an id; `wait_for_video` is bounded and returns `timed_out: true` (with the latest status) instead of blocking forever.
 - **Guardrails:** the shared client rate-limits, caps concurrency, retries only retryable errors with backoff, honors `Retry-After`, and sends idempotency keys on creates — so an agent in a loop can't flood the API.
-- **No secrets in output.**
+- **No secrets in output.** API keys and sign-up claim tokens never appear in a tool result. The server keeps claim tokens in memory and in `~/.vivideo/claims.json` (`0600`).
+- **Payment waits are polite:** status tools poll at most once per 10 s per checkout, even when an agent calls them in a loop.
+- **Server instructions** (sent at `initialize`) tell the agent the sign-up flow: a new email → `start_signup` and show the link; `account_exists` → the login code from the user's inbox; keep keys and claim tokens secret.
 
 ## External steps remaining
 

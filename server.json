@@ -1,25 +1,25 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.egocen-vivideo/vivideo",
-  "description": "AI video generation via the Vivideo API: auto or manual mode, avatars, voices, brand kits.",
+  "description": "AI video via the Vivideo API: agents sign up, buy a plan and make auto or manual videos.",
   "repository": {
     "url": "https://github.com/egocen-vivideo/vivideo-toolchain",
     "source": "github"
   },
-  "version": "1.0.2",
+  "version": "1.1.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@vivideo/mcp",
-      "version": "1.0.2",
+      "version": "1.1.0",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "VIVIDEO_API_KEY",
-          "description": "Your Vivideo API key (vv_live_...), created in the app under Settings > More > API Keys.",
-          "isRequired": true,
+          "description": "Your Vivideo API key (vv_live_...), from Settings > More > API Keys. Optional: without it, the start_signup / login-code tools get one.",
+          "isRequired": false,
           "isSecret": true,
           "format": "string"
         }
