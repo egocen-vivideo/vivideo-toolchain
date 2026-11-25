@@ -1,5 +1,7 @@
 # Vivideo Toolchain
 
+[![vivideo-toolchain MCP server](https://glama.ai/mcp/servers/egocen-vivideo/vivideo-toolchain/badges/score.svg)](https://glama.ai/mcp/servers/egocen-vivideo/vivideo-toolchain)
+
 The developer + agent integration layer for the [Vivideo API](https://developers.vivideo.ai) — a shared client, an MCP server, a CLI, and Skills. **Agents are a primary user, not an afterthought.**
 
 Everything sits *on top of* the public API (the source of truth). No backend business logic is duplicated here — the toolchain only adds client-side ergonomics and guardrails.
