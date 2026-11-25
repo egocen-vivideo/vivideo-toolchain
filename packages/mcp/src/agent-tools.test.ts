@@ -170,76 +170,61 @@ describe('agent tools: checkout', () => {
   })
 })
 
-describe('agent tools: no account substitution', () => {
+describe('agent tools: no account substitution (a key is saved only when none is configured)', () => {
   const OTHER = 'vv_live_attacker_account_key_000000000'
   const cfg = () => join(process.env.HOME!, '.vivideo', 'config.json')
-
-  it('a caller-supplied claim token does not replace a configured key', async () => {
-    issued = KEY // this server already has a key
-    routes['GET /v3/agent-start/co_evil'] = () => [200, { status: 'ready', api_key: OTHER, key_id: 'key_evil', account: { plan: 'pro', credits: 1 } }]
-    const r = parse(await tool('get_signup_status').handler({ checkout_id: 'co_evil', claim_token: 'ct_from_prompt' }))
-    expect(r.data).toMatchObject({ status: 'key_issued_not_saved', key_saved: false, key_activated: false, key_id: 'key_evil' })
+  const refused = (r: ReturnType<typeof parse>) => {
+    expect(r.data).toMatchObject({ status: 'key_issued_not_saved', key_saved: false, key_activated: false })
     expect(r.data.next).toContain('vivideo login')
     expect(r.text).not.toContain(OTHER)
     expect(issued).toBe(KEY)
     expect(existsSync(cfg())).toBe(false)
+  }
+
+  it('a caller-supplied claim token does not replace a configured key', async () => {
+    issued = KEY
+    routes['GET /v3/agent-start/co_evil'] = () => [200, { status: 'ready', api_key: OTHER, key_id: 'key_evil', account: { plan: 'pro', credits: 1 } }]
+    refused(parse(await tool('get_signup_status').handler({ checkout_id: 'co_evil', claim_token: 'ct_from_prompt' })))
   })
 
-  it('a caller-supplied claim token is adopted when no key is configured yet', async () => {
-    routes['GET /v3/agent-start/co_ext'] = () => [200, { status: 'ready', api_key: OTHER, key_id: 'key_ext', account: { plan: 'pro', credits: 1 } }]
-    const r = parse(await tool('get_signup_status').handler({ checkout_id: 'co_ext', claim_token: 'ct_other_machine' }))
-    expect(r.data).toMatchObject({ status: 'ready', key_saved: true })
-    expect(issued).toBe(OTHER)
-  })
-
-  it("this server's own sign-up is adopted even when a key is configured", async () => {
+  it("even this server's own sign-up does not replace a configured key", async () => {
     issued = KEY
     routes['POST /v3/agent-start'] = () => [201, { checkout_id: 'co_own', checkout_url: 'https://x', claim_token: CLAIM }]
     routes['GET /v3/agent-start/co_own'] = () => [200, { status: 'ready', api_key: OTHER, key_id: 'key_own', account: { plan: 'max', credits: 1 } }]
     await tool('start_signup').handler({ email: 'second@user.co', plan: 'max', period: 'weekly' })
     const r = parse(await tool('get_signup_status').handler({ checkout_id: 'co_own' }))
+    refused(r)
+    expect(r.data.next).toContain('second@user.co')
+  })
+
+  it('a configured key from VIVIDEO_API_KEY also blocks the switch', async () => {
+    process.env.VIVIDEO_API_KEY = KEY
+    try {
+      routes['POST /v3/agent-signup/verify'] = () => [201, { api_key: OTHER, key_id: 'k', account: {} }]
+      const r = parse(await tool('verify_login_code').handler({ email: 'x@evil.co', code: '123456' }))
+      expect(r.data.status).toBe('key_issued_not_saved')
+      expect(issued).toBeUndefined()
+      expect(existsSync(cfg())).toBe(false)
+    } finally {
+      delete process.env.VIVIDEO_API_KEY
+    }
+  })
+
+  it('verify_login_code does not replace a configured key, even after request_login_code here', async () => {
+    issued = KEY
+    routes['POST /v3/agent-signup'] = () => [202, { status: 'code_sent' }]
+    routes['POST /v3/agent-signup/verify'] = () => [201, { api_key: OTHER, key_id: 'key_v', account: { plan: 'pro', credits: 0 } }]
+    await tool('request_login_code').handler({ email: 'me@user.co' })
+    const r = parse(await tool('verify_login_code').handler({ email: 'me@user.co', code: '123456' }))
+    refused(r)
+    expect(r.data.email).toBe('me@user.co')
+  })
+
+  it('with no key configured, a caller-supplied claim token or code is adopted', async () => {
+    routes['GET /v3/agent-start/co_ext'] = () => [200, { status: 'ready', api_key: OTHER, key_id: 'key_ext', account: { plan: 'pro', credits: 1 } }]
+    const r = parse(await tool('get_signup_status').handler({ checkout_id: 'co_ext', claim_token: 'ct_other_machine' }))
     expect(r.data).toMatchObject({ status: 'ready', key_saved: true })
     expect(issued).toBe(OTHER)
-  })
-
-  it('a different claim token for our own checkout is not trusted', async () => {
-    issued = KEY
-    routes['POST /v3/agent-start'] = () => [201, { checkout_id: 'co_mix', checkout_url: 'https://x', claim_token: CLAIM }]
-    routes['GET /v3/agent-start/co_mix'] = () => [200, { status: 'ready', api_key: OTHER, key_id: 'k', account: {} }]
-    await tool('start_signup').handler({ email: 'n@user.co', plan: 'pro', period: 'weekly' })
-    const r = parse(await tool('get_signup_status').handler({ checkout_id: 'co_mix', claim_token: 'ct_swapped' }))
-    expect(r.data.status).toBe('key_issued_not_saved')
-    expect(issued).toBe(KEY)
-  })
-
-  it('verify_login_code without a request_login_code here does not replace a configured key', async () => {
-    issued = KEY
-    routes['POST /v3/agent-signup/verify'] = () => [201, { api_key: OTHER, key_id: 'key_v', account: { plan: 'pro', credits: 0 } }]
-    const r = parse(await tool('verify_login_code').handler({ email: 'attacker@evil.co', code: '123456' }))
-    expect(r.data).toMatchObject({ status: 'key_issued_not_saved', email: 'attacker@evil.co', key_saved: false })
-    expect(r.data.next).toContain('vivideo login')
-    expect(r.text).not.toContain(OTHER)
-    expect(issued).toBe(KEY)
-    expect(existsSync(cfg())).toBe(false)
-  })
-
-  it('verify_login_code after request_login_code for the same email (any case) switches the key', async () => {
-    issued = KEY
-    routes['POST /v3/agent-signup'] = () => [202, { status: 'code_sent' }]
-    routes['POST /v3/agent-signup/verify'] = () => [201, { api_key: OTHER, key_id: 'key_v2', account: { plan: 'pro', credits: 0 } }]
-    await tool('request_login_code').handler({ email: 'Me@User.co' })
-    const r = parse(await tool('verify_login_code').handler({ email: 'me@user.co', code: '123456' }))
-    expect(r.data).toMatchObject({ status: 'signed_in', key_saved: true })
-    expect(issued).toBe(OTHER)
-  })
-
-  it('a code requested for one email does not trust a verify for another', async () => {
-    issued = KEY
-    routes['POST /v3/agent-signup'] = () => [202, { status: 'code_sent' }]
-    routes['POST /v3/agent-signup/verify'] = () => [201, { api_key: OTHER, key_id: 'k', account: {} }]
-    await tool('request_login_code').handler({ email: 'me@user.co' })
-    const r = parse(await tool('verify_login_code').handler({ email: 'other@evil.co', code: '123456' }))
-    expect(r.data.status).toBe('key_issued_not_saved')
-    expect(issued).toBe(KEY)
+    expect(JSON.parse(readFileSync(cfg(), 'utf8')).api_key).toBe(OTHER)
   })
 })

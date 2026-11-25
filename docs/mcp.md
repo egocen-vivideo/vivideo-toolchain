@@ -13,7 +13,7 @@ node packages/mcp/dist/index.js       # starts the stdio server
 npx @vivideo/mcp
 ```
 
-The video tools need a `VIVIDEO_API_KEY` in the server's environment (a key from https://app.vivideo.ai/account/api-keys). The server starts without one: `check_configuration` reports `configured: false`, and the sign-up tools can get a key. `start_signup` is for a new email (the user pays on a Stripe link). `request_login_code` + `verify_login_code` are for an existing account. The new key is saved to `~/.vivideo/config.json` (`0600`) and used right away. If a key is already configured, the server replaces it only for a flow it started itself; otherwise the result is `key_issued_not_saved`. See [agent sign-up](agent-signup.md).
+The video tools need a `VIVIDEO_API_KEY` in the server's environment (a key from https://app.vivideo.ai/account/api-keys). The server starts without one: `check_configuration` reports `configured: false`, and the sign-up tools can get a key. `start_signup` is for a new email (the user pays on a Stripe link). `request_login_code` + `verify_login_code` are for an existing account. The new key is saved to `~/.vivideo/config.json` (`0600`) and used right away. If a key is already configured, it is never replaced: the result is `key_issued_not_saved`, and the user switches accounts with `vivideo login` / `vivideo configure`. See [agent sign-up](agent-signup.md).
 
 ## Connect to a client
 
@@ -59,7 +59,7 @@ All tools return structured JSON. Errors come back as a structured object (`isEr
 | `list_videos` | The account's videos, newest first. |
 | `render_preview` | Free accounts: render a `preview` after upgrading. |
 | `start_signup` | **No key needed.** New email: returns a Stripe `checkout_url` to show the user. `account_exists` → use the code tools. |
-| `get_signup_status` | **No key needed.** `pending` / `ready` (key saved + active) / `needs_code` / `claimed` / `expired` / `failed`. `wait_seconds` ≤ 300. |
+| `get_signup_status` | **No key needed.** `pending` / `ready` (key saved + active if none is configured) / `needs_code` / `claimed` / `expired` / `failed`. `wait_seconds` ≤ 300. |
 | `request_login_code` | **No key needed.** Existing account: emails a 6-digit code. |
 | `verify_login_code` | **No key needed.** Code → new key, saved and active. Never returned. |
 | `start_checkout` | Buy a plan (`plan` + `period`) or `credits`: returns a link for the user. |

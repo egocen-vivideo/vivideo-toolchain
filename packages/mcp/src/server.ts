@@ -19,7 +19,7 @@ export const INSTRUCTIONS = [
   'No API key yet:',
   '- A NEW email: call start_signup {email, plan, period} and SHOW the returned checkout_url to your user; paying on that',
   '  Stripe page is the only step a person must do. Then call get_signup_status (wait_seconds up to 300). On "ready" the key',
-  '  is saved and every tool uses it.',
+  '  is saved and every tool uses it. A configured key is never replaced: to switch accounts the user runs `vivideo login`.',
   '- account_exists (or needs_code): the email already has an account. Call request_login_code, ask your user for the',
   '  6-digit code from their inbox, then verify_login_code. Payment never opens an existing account.',
   'Buying later: start_checkout (plan + period, or credits) returns a link for your user; then get_checkout.',

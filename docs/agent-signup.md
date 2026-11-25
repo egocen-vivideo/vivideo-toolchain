@@ -80,11 +80,7 @@ The stdio server (`@vivideo/mcp`) has the same flow as tools. `start_signup`, `g
 
 The server keeps claim tokens in memory and in `~/.vivideo/claims.json` (`0600`), so a restart does not lose a pending sign-up. Tool results never contain a claim token or an API key.
 
-**No silent account switch.** The server saves and uses a new key only in two cases:
-- no key is configured yet; or
-- this server started the flow itself: its own `start_signup` claim, or a `request_login_code` for the same email in this process.
-
-Otherwise, for example a `claim_token` passed in by the caller or a code this server never requested, the key is not saved or used. The result has `status: "key_issued_not_saved"`, and switching accounts is left to the user (`vivideo login` / `vivideo configure`). The CLI has no such check, because its commands are typed by the user, like `configure`.
+**No silent account switch.** The server saves and uses a new key **only when no key is configured**: none in this process, in `VIVIDEO_API_KEY` or in `~/.vivideo/config.json`. If a key is configured, a newly issued key is never saved, never used and never shown, even for a sign-up this server started. The result is `status: "key_issued_not_saved"` with the email and `key_id`. To switch accounts, the user runs `vivideo login --email …` or `vivideo configure` themselves; the unused key can be revoked in Settings → API keys. The CLI has no such check, because its commands are typed by the user, like `configure`.
 
 ## Security
 
