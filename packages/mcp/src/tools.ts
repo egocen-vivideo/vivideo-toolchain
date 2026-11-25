@@ -8,6 +8,7 @@
  *   • the shared client enforces rate limits, retries, idempotency & redaction
  */
 import { z } from 'zod'
+import { agentTools } from './agent-tools.js'
 import {
   VivideoClient, VivideoError, isVivideoError, waitForVideo, estimateCredits,
   isConfigured, type Model, type Video,
@@ -16,8 +17,10 @@ import {
 // One client per process; constructed lazily so the server still starts (and
 // check_configuration works) when no key is set yet.
 let _client: VivideoClient | null = null
+// A key issued in this process by sign-up / sign-in (wins over env and the config file).
+let _issuedKey: string | undefined
 function client(): VivideoClient {
-  if (!_client) _client = new VivideoClient({ userAgent: 'vivideo-mcp/1.0' })
+  if (!_client) _client = new VivideoClient({ apiKey: _issuedKey, userAgent: 'vivideo-mcp/1.0' })
   return _client
 }
 
@@ -67,12 +70,14 @@ export const TOOLS: ToolDef[] = [
     description:
       'Check whether a Vivideo API key is configured for this MCP server. Call this FIRST. ' +
       'Returns { configured: boolean }. If false, ask the user to set the VIVIDEO_API_KEY environment ' +
-      'variable (a key from https://app.vivideo.ai/account/api-keys) and restart the MCP server. Never asks for or exposes the key.',
+      'variable (a key from https://app.vivideo.ai/account/api-keys) and restart the MCP server. Never asks for or exposes the key. ' +
+      'No account yet: start_signup (new email, pay-first). Existing account: request_login_code + verify_login_code.',
     schema: {},
     handler: async () =>
       ok({
-        configured: isConfigured(),
+        configured: !!_issuedKey || isConfigured(),
         how_to_configure: 'Set env VIVIDEO_API_KEY=vv_live_... (create one in the Vivideo app: Settings > More > API Keys).',
+        no_key_yet: 'New email: start_signup (your user pays on a Stripe link). Existing account: request_login_code, then verify_login_code.',
         docs: 'https://developers.vivideo.ai/authentication',
       }),
   },
@@ -289,6 +294,15 @@ export const TOOLS: ToolDef[] = [
     schema: { id: z.string().describe('The preview video id.') },
     handler: (a) => guarded(async () => compactVideo(await client().renderVideo(a.id as string))),
   },
+  // Sign-up, sign-in and payment (V3): start_signup, get_signup_status, request_login_code,
+  // verify_login_code, start_checkout, get_checkout.
+  ...agentTools({
+    onKey: (key) => {
+      _issuedKey = key
+      _client = null // rebuild with the new key on next use
+    },
+    currentKey: () => _issuedKey,
+  }),
 ]
 
 // Re-export for tests.
