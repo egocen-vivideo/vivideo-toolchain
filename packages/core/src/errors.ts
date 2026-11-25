@@ -18,6 +18,8 @@ export type ErrorKind =
   | 'server' // 5xx / upstream_error — retryable
   | 'network' // transport failure / timeout — retryable
   | 'config' // client misconfiguration (no key etc.)
+  | 'conflict' // 409 account_exists / has_subscription / key_limit_reached (V3)
+  | 'forbidden' // 403 not_allowed / account_unavailable / guest_account (V3)
 
 const CODE_TO_KIND: Record<string, ErrorKind> = {
   missing_api_key: 'auth',
@@ -39,6 +41,36 @@ const CODE_TO_KIND: Record<string, ErrorKind> = {
   internal_error: 'server',
 }
 
+// V3 error codes (flat envelope: {error: "<code>", message, request_id, details?, next?}).
+const V3_CODE_TO_KIND: Record<string, ErrorKind> = {
+  invalid_request: 'invalid_request',
+  invalid_code: 'invalid_request',
+  idempotency_key_reused: 'duplicate',
+  checkout_in_progress: 'duplicate',
+  account_exists: 'conflict',
+  has_subscription: 'conflict',
+  unpaid_invoice: 'conflict',
+  subscription_managed_by_store: 'conflict',
+  key_limit_reached: 'conflict',
+  not_allowed: 'forbidden',
+  account_unavailable: 'forbidden',
+  guest_account: 'forbidden',
+  api_key_not_allowed: 'forbidden',
+  plan_required: 'upgrade_required',
+  insufficient_credits: 'insufficient_credits',
+  rate_limited: 'rate_limited',
+  too_many_attempts: 'rate_limited',
+  key_rate_limited: 'rate_limited',
+  checkout_limit: 'rate_limited',
+  not_found: 'not_found',
+}
+// Refusals that will not change on retry, even though they are 5xx.
+const V3_NOT_RETRYABLE = new Set(['agent_access_disabled', 'payments_unavailable'])
+const STATUS_TO_KIND: Record<number, ErrorKind> = {
+  400: 'invalid_request', 401: 'auth', 402: 'insufficient_credits', 403: 'forbidden',
+  404: 'not_found', 409: 'conflict', 413: 'payload_too_large', 429: 'rate_limited',
+}
+
 export class VivideoError extends Error {
   readonly code: string
   readonly kind: ErrorKind
@@ -48,6 +80,8 @@ export class VivideoError extends Error {
   readonly retryAfterSeconds?: number
   readonly details?: Record<string, unknown>
   readonly links?: Links
+  /** V3 next-step object (e.g. next.signup on 409 account_exists). */
+  readonly next?: Record<string, unknown>
 
   constructor(args: {
     code: string
@@ -59,6 +93,7 @@ export class VivideoError extends Error {
     retryAfterSeconds?: number
     details?: Record<string, unknown>
     links?: Links
+    next?: Record<string, unknown>
   }) {
     super(redact(args.message))
     this.name = 'VivideoError'
@@ -70,6 +105,7 @@ export class VivideoError extends Error {
     this.retryAfterSeconds = args.retryAfterSeconds
     this.details = args.details
     this.links = args.links
+    this.next = args.next
   }
 
   /** Build a VivideoError from an HTTP response body (the API error envelope). */
@@ -87,6 +123,30 @@ export class VivideoError extends Error {
       retryAfterSeconds: typeof err?.retry_after_seconds === 'number' ? err.retry_after_seconds : undefined,
       details: (err?.details as Record<string, unknown>) ?? undefined,
       links: (err?.links as Links) ?? undefined,
+    })
+  }
+
+  /** Build a VivideoError from a V3 response (flat envelope; Retry-After comes as a header). */
+  static fromV3(status: number, body: unknown, retryAfterHeader?: string | null): VivideoError {
+    const b = (body ?? {}) as Record<string, unknown>
+    if (b.error && typeof b.error === 'object') return VivideoError.fromApi(status, body) // V1-style envelope
+    const code = typeof b.error === 'string' && b.error ? b.error : `http_${status}`
+    const kind = V3_CODE_TO_KIND[code] ?? STATUS_TO_KIND[status] ?? (status >= 500 ? 'server' : 'invalid_request')
+    const header = retryAfterHeader != null && /^\d+$/.test(retryAfterHeader.trim()) ? Number(retryAfterHeader.trim()) : undefined
+    const retryAfter = typeof b.retry_after_seconds === 'number' ? b.retry_after_seconds : header
+    const retryable = typeof b.retryable === 'boolean'
+      ? b.retryable
+      : !V3_NOT_RETRYABLE.has(code) && (status >= 500 || status === 429)
+    return new VivideoError({
+      code,
+      message: String(b.message ?? `Request failed with status ${status}`),
+      kind,
+      status,
+      retryable,
+      requestId: b.request_id ? String(b.request_id) : undefined,
+      retryAfterSeconds: retryAfter,
+      details: (b.details as Record<string, unknown>) ?? undefined,
+      next: b.next && typeof b.next === 'object' ? (b.next as Record<string, unknown>) : undefined,
     })
   }
 
@@ -110,6 +170,7 @@ export class VivideoError extends Error {
         retry_after_seconds: this.retryAfterSeconds,
         details: this.details,
         links: this.links,
+        next: this.next,
       },
     }
   }

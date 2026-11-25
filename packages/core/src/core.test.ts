@@ -81,6 +81,16 @@ describe('credit estimation (from published rates)', () => {
 })
 
 describe('config storage security', () => {
+  // Write into a temp HOME, never the developer's real ~/.vivideo/config.json.
+  const realHome = process.env.HOME
+  beforeEach(async () => {
+    const { mkdtempSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    process.env.HOME = mkdtempSync(join(tmpdir(), 'vivideo-cfg-'))
+  })
+  afterEach(() => { process.env.HOME = realHome })
+
   it('saveConfig writes the file with 0600 (owner-only) permissions', async () => {
     const { saveConfig } = await import('./config.js')
     const { statSync } = await import('node:fs')
