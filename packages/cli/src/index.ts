@@ -13,6 +13,7 @@ import {
 } from '@vivideo/core'
 import { run, nonInteractive, makeClient, outputCtx, type GlobalOpts } from './context.js'
 import { printResult, reportError } from './output.js'
+import { registerAgentCommands } from './agent.js'
 
 // Read the version from package.json so `--version` never drifts from the
 // published package version.
@@ -32,36 +33,39 @@ program
   .option('-y, --yes', 'assume yes / non-interactive')
   .option('--api-key <key>', 'API key (prefer the VIVIDEO_API_KEY env var)')
   .option('--base-url <url>', 'override the API base URL')
+  .option('--v3-base-url <url>', 'override the V3 API base URL (sign-up, login, checkout; env VIVIDEO_V3_BASE_URL)')
 
 const g = (): GlobalOpts => program.opts()
 
 // ---------------------------------------------------------------- configure
+// `login` is registered in agent.ts: with --email it runs the code flow, without it this same action.
+async function configureAction(opts: { apiKey?: string; verify?: boolean }): Promise<void> {
+  const gg = g()
+  const ctx = outputCtx(gg)
+  let key = opts.apiKey || gg.apiKey || process.env.VIVIDEO_API_KEY
+  if (!key && !nonInteractive(gg)) key = await prompt('Vivideo API key (vv_live_…): ')
+  if (!key) {
+    process.stderr.write('✗ No API key provided. Pass --api-key or set VIVIDEO_API_KEY.\n')
+    process.exit(3)
+  }
+  if (!looksLikeKey(key)) process.stderr.write('! Warning: this does not look like a vv_live_ key.\n')
+  if (opts.verify) {
+    try {
+      await makeClient({ ...gg, apiKey: key }).me()
+    } catch (e) {
+      process.exit(reportError(ctx, e))
+    }
+  }
+  const path = saveConfig({ apiKey: key, baseUrl: gg.baseUrl })
+  printResult(ctx, { saved: true, path }, () => `✓ Saved. Config: ${path}\n  The key is stored with owner-only permissions and never printed.`)
+}
+
 program
   .command('configure')
-  .alias('login')
   .description('Store your API key securely in ~/.vivideo/config.json (0600).')
   .option('--api-key <key>', 'the key to store (else prompt / VIVIDEO_API_KEY)')
   .option('--verify', 'verify the key against the API before saving')
-  .action(async (opts) => {
-    const gg = g()
-    const ctx = outputCtx(gg)
-    let key = opts.apiKey || gg.apiKey || process.env.VIVIDEO_API_KEY
-    if (!key && !nonInteractive(gg)) key = await prompt('Vivideo API key (vv_live_…): ')
-    if (!key) {
-      process.stderr.write('✗ No API key provided. Pass --api-key or set VIVIDEO_API_KEY.\n')
-      process.exit(3)
-    }
-    if (!looksLikeKey(key)) process.stderr.write('! Warning: this does not look like a vv_live_ key.\n')
-    if (opts.verify) {
-      try {
-        await makeClient({ ...gg, apiKey: key }).me()
-      } catch (e) {
-        process.exit(reportError(ctx, e))
-      }
-    }
-    const path = saveConfig({ apiKey: key, baseUrl: gg.baseUrl })
-    printResult(ctx, { saved: true, path }, () => `✓ Saved. Config: ${path}\n  The key is stored with owner-only permissions and never printed.`)
-  })
+  .action(configureAction)
 
 program
   .command('config')
@@ -239,6 +243,9 @@ program
     const v = await client.renderVideo(id)
     printResult(ctx, v, () => summarizeVideo(v))
   }))
+
+// ---------------------------------------------------------------- sign-up / login / checkout
+registerAgentCommands(program, g, configureAction, prompt)
 
 program.parseAsync(process.argv).catch((e) => {
   // Commander parse errors (bad/missing flags, --help, --version) → usage/exit codes.

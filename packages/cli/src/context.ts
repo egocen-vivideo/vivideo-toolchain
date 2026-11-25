@@ -2,7 +2,7 @@
  * Shared CLI helpers: build a client from global options and run a command with
  * uniform error handling + exit codes.
  */
-import { VivideoClient } from '@vivideo/core'
+import { VivideoClient, VivideoV3Client } from '@vivideo/core'
 import { die, type OutputCtx } from './output.js'
 
 export interface GlobalOpts {
@@ -12,6 +12,7 @@ export interface GlobalOpts {
   yes?: boolean
   apiKey?: string
   baseUrl?: string
+  v3BaseUrl?: string
 }
 
 export function outputCtx(g: GlobalOpts): OutputCtx {
@@ -20,6 +21,11 @@ export function outputCtx(g: GlobalOpts): OutputCtx {
 
 export function makeClient(g: GlobalOpts): VivideoClient {
   return new VivideoClient({ apiKey: g.apiKey, baseUrl: g.baseUrl, userAgent: 'vivideo-cli/1.0' })
+}
+
+/** The V3 client (agent sign-up, login code, checkout). Builds without a key. */
+export function makeV3Client(g: GlobalOpts): VivideoV3Client {
+  return new VivideoV3Client({ apiKey: g.apiKey, baseUrl: g.v3BaseUrl, userAgent: 'vivideo-cli/1.1' })
 }
 
 /** Non-interactive when --json, --no-input, --yes, or not a TTY (CI/agents). */
@@ -32,6 +38,16 @@ export async function run(g: GlobalOpts, body: (client: VivideoClient, ctx: Outp
   const ctx = outputCtx(g)
   try {
     await body(makeClient(g), ctx)
+  } catch (e) {
+    die(ctx, e)
+  }
+}
+
+/** Like run(), for commands on the V3 client (no key needed to start). */
+export async function runV3(g: GlobalOpts, body: (client: VivideoV3Client, ctx: OutputCtx) => Promise<void>): Promise<void> {
+  const ctx = outputCtx(g)
+  try {
+    await body(makeV3Client(g), ctx)
   } catch (e) {
     die(ctx, e)
   }

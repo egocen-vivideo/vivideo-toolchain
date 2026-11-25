@@ -8,7 +8,7 @@
  */
 import { isVivideoError, redactDeep, VivideoError, type ErrorKind } from '@vivideo/core'
 
-export const EXIT: Record<ErrorKind | 'ok' | 'usage' | 'unknown', number> = {
+export const EXIT: Record<ErrorKind | 'ok' | 'usage' | 'unknown' | 'timed_out' | 'needs_code' | 'payment_incomplete', number> = {
   ok: 0,
   unknown: 1,
   usage: 2,
@@ -23,6 +23,11 @@ export const EXIT: Record<ErrorKind | 'ok' | 'usage' | 'unknown', number> = {
   duplicate: 10,
   payload_too_large: 9,
   server: 1,
+  conflict: 11, // e.g. has_subscription, key_limit_reached
+  forbidden: 12, // not_allowed, account_unavailable, guest_account
+  timed_out: 8, // stopped waiting (same code as `vivideo wait`); resume with a status command
+  needs_code: 13, // the email already has an account: finish with `vivideo login --email … --code …`
+  payment_incomplete: 14, // checkout expired or failed
 }
 
 export interface OutputCtx {
@@ -57,7 +62,8 @@ export function reportError(ctx: OutputCtx, e: unknown): number {
   // Actionable next steps.
   if (err.kind === 'insufficient_credits' && err.links?.buy_credits) lines.push(`  → buy credits: ${err.links.buy_credits}`)
   if (err.kind === 'upgrade_required' && err.links?.upgrade) lines.push(`  → upgrade: ${err.links.upgrade}`)
-  if (err.kind === 'auth' || err.kind === 'config') lines.push('  → set VIVIDEO_API_KEY or run `vivideo configure`.')
+  if (err.kind === 'auth' || err.kind === 'config') lines.push('  → set VIVIDEO_API_KEY, run `vivideo configure`, or get a key with `vivideo signup` / `vivideo login --email`.')
+  if (err.kind === 'upgrade_required' && err.next?.checkout) lines.push('  → buy a plan: vivideo checkout --plan pro|max --period weekly|yearly')
   if (err.kind === 'rate_limited') lines.push('  → slow down; retry after the delay above.')
   process.stderr.write(lines.join('\n') + '\n')
   return code
