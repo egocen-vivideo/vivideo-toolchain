@@ -1,6 +1,6 @@
 {
   "name": "@vivideo/cli",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Vivideo CLI \u2014 generate AI videos from the terminal, scripts, CI, or agents.",
   "type": "module",
   "bin": {
@@ -14,7 +14,7 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@vivideo/core": "^1.1.0",
+    "@vivideo/core": "^1.1.1",
     "commander": "^12.1.0"
   },
   "engines": {
