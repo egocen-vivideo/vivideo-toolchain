@@ -1,6 +1,6 @@
 {
   "name": "@vivideo/core",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Shared, typed Vivideo API client with built-in rate limiting, retries, idempotency and secret redaction.",
   "type": "module",
   "main": "./dist/index.js",
